@@ -13,6 +13,6 @@ namespace Executors
     {
 
         // execute the task
-        public void Post(Action task);
+        public void Post(Action action);
     }
 }

@@ -6,12 +6,13 @@ namespace Executors
     public class ThreadedPoolExecutor : IExecutor
     {
         // execute the task
-        public void Post(Action task)
+        public void Post(Action action)
         {
             ThreadPool.QueueUserWorkItem(input =>
             {
-                task();
+                action();
             });
         }
+
     }
 }

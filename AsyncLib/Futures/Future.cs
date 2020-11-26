@@ -1,99 +1,93 @@
 ﻿using System;
+using System.Threading;
 
 using Executors;
 
 namespace Futures
 {
+
+    // Future is an abstraction of a way to fetch the result asynchronously
+    // There are two types of the Futures:
+    // 1. get from Promise
+    // 2. created a fullfiled Future
+    // One can attach continuation callbacks via Future.Then method. The callback
+    // is essentially a Action<object> or Func<object, object>, where the former
+    // doesn't return value and the latter will return a value.
     public class Future
     {
-        // private method to make sure Future can only create by MakeFuture and
-        // Promise
-        internal Future()
-        {
-            sharedState_ = new SharedState();
-        }
-
         internal Future(SharedState state)
         {
             sharedState_ = state;
         }
 
-
         // create a fullfilled Future
         public static Future MakeFuture(object value)
         {
-            Future future = new Future(new SharedState());
-            future.sharedState_.SetResult(value);
-            return future;
+            Promise p = new Promise();
+            Future f = p.GetFuture();
+            p.SetValue(value);
+            return f;
         }
 
         public bool IsReady()
         {
-            return sharedState_.IsReady();
+            return sharedState_.isReady;
         }
 
         public object Get()
         {
-            Promise promise = new Promise();
+            Wait();
+            return sharedState_.result;
+        }
 
-            Future ret = promise.GetFuture();
-
-            Action<object> action = (result) =>
+        public void Wait()
+        {
+            while (!sharedState_.isReady)
             {
-                promise.SetValue(result);
-            };
-
-            SetCallback(action);
-
-            // block to wait
-            while (!IsReady()) { }
-
-            return sharedState_.GetResult();
+                sharedState_.doneEvent.WaitOne();
+            }
         }
 
         public Future Then(Action<object> func)
         {
-            Promise p = new Promise();
+            AsyncTask task = new AsyncTask(func);
+            Action action = () => { task.Execute(sharedState_.result); };
 
-            Future f = p.GetFuture();
 
-            this.SetCallback((input) =>
+            if (sharedState_.isReady)
             {
-                func(input);
-                p.SetValue(new Object());
-            });
+                sharedState_.executor.Post(action);
+            }
+            else
+            {
+                sharedState_.func = action;
+            }
 
-
-            return f;
+            return task.GetFuture();
         }
 
         public Future Then(Func<object, object> func)
         {
-            Promise p = new Promise();
+            AsyncTask task = new AsyncTask(func);
+            Action action = () => { task.Execute(sharedState_.result); };
 
-            Future f = p.GetFuture();
-
-            this.SetCallback((input) =>
+            if (sharedState_.isReady)
             {
-                Object result = func(input);
-                p.SetValue(result);
-            });
+                sharedState_.executor.Post(action);
+            }
+            else
+            {
+                sharedState_.func = action;
+            }
 
-
-            return f;
+            return task.GetFuture();
         }
 
         public Future Via(IExecutor executor)
         {
-            sharedState_.SetExecutor(executor);
+            sharedState_.executor = executor;
             return this;
         }
-
-        private void SetCallback(Action<object> action)
-        {
-            sharedState_.SetCallback(action);
-        }
-
 
         private SharedState sharedState_;
     }

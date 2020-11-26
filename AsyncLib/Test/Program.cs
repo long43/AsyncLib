@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 
 using Executors;
 
@@ -18,11 +19,13 @@ namespace Futures
 
     class Program
     {
-        static void Main(string[] args)
+        static void TestFutures()
         {
             IExecutor executor = new SingleThreadExecutor();
 
-            Future f = Future.MakeFuture(1).Then(result =>
+            Promise p = new Promise();
+
+            Future f = p.GetFuture().Then(result =>
             {
                 int ret = (int)result;
                 Console.WriteLine("result is " + ret);
@@ -35,28 +38,56 @@ namespace Futures
                 ret++;
                 return ret;
             }).Via(executor).Then(result =>
-           {
-               int id = (int)result;
-               return new Person(id);
-           });
+            {
+                Console.WriteLine("result is " + result);
+                int id = (int)result;
+                return new Person(id);
+            }).Via(executor).Then(result =>
+            {
+                Person ps = (Person)result;
+                Console.WriteLine("person id is " + ps.id + " name is " + ps.name);
+                return ps;
+            });
 
 
-            Person value = (Person)f.Get();
+            p.SetValue(1);
 
-            //int state = 1;
-            //ManualResetEvent _doneEvent = new ManualResetEvent(false);
+            Person ps = (Person)f.Get();
+            Console.WriteLine("person id is " + ps.id + " name is " + ps.name);
+        }
 
-            //ThreadPool.QueueUserWorkItem((input) =>
-            //{
-            //    Console.WriteLine("hello world");
-            //    state = 2;
-            //    _doneEvent.Set();
-            //});
+        static void TestAsyncQueue()
+        {
+            AsyncQueue queue = new AsyncQueue();
 
-            //_doneEvent.WaitOne();
+            //use another thread to enqueue tasks to the queue
+            Thread producer = new Thread(() =>
+            {
+                for (int i = 0; i < 10; i++)
+                {
+                    int n = i;
+                    AsyncTask task = new AsyncTask(() =>
+                    {
+                        Thread.Sleep(1000);
+                    });
 
-            Console.WriteLine("person name is " + value.name + " and id is " + value.id);
-            Console.WriteLine();
+                    queue.Enqueue(task);
+                }
+            });
+
+            producer.Start();
+
+            producer.Join();
+
+            Future f = queue.queueEnd;
+
+            f.Get();
+
+        }
+
+        static void Main(string[] args)
+        {
+            TestAsyncQueue();
         }
     }
 }

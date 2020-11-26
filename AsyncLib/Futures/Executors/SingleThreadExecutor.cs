@@ -4,7 +4,7 @@ using System.Threading;
 
 namespace Executors
 {
-    public class SingleThreadExecutor : IExecutor
+    public class SingleThreadExecutor : IExecutor, IDisposable
     {
         public SingleThreadExecutor()
         {
@@ -12,9 +12,9 @@ namespace Executors
             thread_ = new Thread(() =>
             {
                 Console.WriteLine("spawn a new thread to take tasks from blockingCollection");
-                foreach (var task in tasksQueue_.GetConsumingEnumerable())
+                foreach (var action in tasksQueue_.GetConsumingEnumerable())
                 {
-                    task();
+                    action();
                 }
             });
             thread_.Start();
@@ -24,8 +24,13 @@ namespace Executors
         public void Post(Action task)
         {
             tasksQueue_.Add(task);
+        }
+
+        void IDisposable.Dispose()
+        {
             tasksQueue_.CompleteAdding();
         }
+
 
         private Thread thread_;
         private BlockingCollection<Action> tasksQueue_;
